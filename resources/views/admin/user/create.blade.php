@@ -28,3 +28,8 @@
     </div>
 </main>
 @endsection
+
+@section('script')
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.form/4.3.0/jquery.form.min.js"></script>
+<script src="{{ asset('adminTheme/assets/js/form-js.js') }}"></script>
+@endsection

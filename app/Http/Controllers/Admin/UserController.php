@@ -6,12 +6,10 @@ use App\Http\Controllers\Admin\AdminController;
 use Illuminate\Http\Request;
 use App\Models\User;
 use DataTables;
-use App\Mail\DemoMail;
-use App\Mail\OrderShipped;
-use App\Mail\NewTestMail;
-use App\Jobs\TestJob;
 use Mail;
 use Hash;
+use Validator;
+use DB;
 
 class UserController extends AdminController
 {
@@ -57,23 +55,34 @@ class UserController extends AdminController
     public function store(Request $request)
     {
         $input = $request->all();
-
-        $request->validate([
+        $validator = Validator::make($input, [
             'name' => 'required',
             'email' => 'required|unique:users|email',
             'password' => 'required',
             'confirm_password' => 'required_with:password|same:password',
         ]);
 
-        $input['password'] = bcrypt($input['password']);
-        
-        $user = User::create($input);
+        if ($validator->passes()) {
+            DB::beginTransaction();
+            try {
+                $input['password'] = bcrypt($input['password']);
+                $user = User::create($input);
 
-        $user->testingMail($user->email);
+                notificationMsg('success',$this->crudMessage('add','User'));
 
-        notificationMsg('success',$this->crudMessage('add','User'));
-
-        return redirect()->route('user.index');
+                DB::commit();
+                return response()->json(['success' => 'success', 'redirectUrl' => route('user.index')]);
+            } catch (Exception $e) {
+                DB::rollback();
+                Log::error("Exception during registration: " . $e->getMessage());
+                return response()->json(['error' => ['message' => 'Something went wrong, please try again later']]);
+            } catch (Throwable $e) {
+                DB::rollback();
+                Log::error("Throwable during registration: " . $e->getMessage());
+                return response()->json(['error' => ['message' => 'Something went wrong, please try again later']]);
+            }
+        }
+        return response()->json(['error' => $validator->errors()]);
     }
 
     /**
@@ -99,25 +108,37 @@ class UserController extends AdminController
     public function update(Request $request, User $user)
     {
         $input = $request->all();
-
-        $request->validate([
+        $validator = Validator::make($input, [
             'name' => 'required',
             'email' => 'required|email|unique:users,email,'. $user->id,
             'confirm_password' => 'required_with:password|same:password',
         ]);
 
-        if (!empty($request['password'])) {
-            $input['password'] = bcrypt($request->input('password'));
-        }
-        else {
-            $input['password'] = $user->password;
-        }
-        
-        $user->update($input);
+        if ($validator->passes()) {
+            DB::beginTransaction();
+            try {
+                if (!empty($request['password'])) {
+                    $input['password'] = bcrypt($request->input('password'));
+                } else {
+                    $input['password'] = $user->password;
+                }
+                $user->update($input);
 
-        notificationMsg('success',$this->crudMessage('update','User'));
+                notificationMsg('success',$this->crudMessage('update','User'));
 
-        return redirect()->route('user.index');
+                DB::commit();
+                return response()->json(['success' => 'success', 'redirectUrl' => route('user.index')]);
+            } catch (Exception $e) {
+                DB::rollback();
+                Log::error("Exception during registration: " . $e->getMessage());
+                return response()->json(['error' => ['message' => 'Something went wrong, please try again later']]);
+            } catch (Throwable $e) {
+                DB::rollback();
+                Log::error("Throwable during registration: " . $e->getMessage());
+                return response()->json(['error' => ['message' => 'Something went wrong, please try again later']]);
+            }
+        }
+        return response()->json(['error' => $validator->errors()]);
     }
 
     /**
@@ -126,7 +147,6 @@ class UserController extends AdminController
     public function destroy(User $user)
     {
         $user->delete();
-
         notificationMsg('success',$this->crudMessage('delete','User'));
 
         return redirect()->back();
